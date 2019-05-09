@@ -13,7 +13,7 @@ import sys
 import logging
 from PyQt5 import QtWidgets
 
-sys.path.insert(1, r'C:\Users\smartin5\Repos\myNeurochat')
+sys.path.insert(1, r'C:\Users\maolivei\neuro_sean\NeuroChaT')
 
 from neurochat.nc_ui import NeuroChaT_Ui
 
