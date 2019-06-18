@@ -773,6 +773,47 @@ class NLfp(NBase):
 
         return graph_data
 
+    def phase_at_events(self, event_stamps, **kwargs):
+        """
+        Phase based on times.
+        
+        Parameters
+        ----------
+        event_stamps : array
+            an array of event times
+        **kwargs:
+            keyword arguments
+        
+        Returns
+        -------
+            (array)
+            Phase values for each position
+        """
+        lfp = self.get_samples() * 1000
+        Fs = self.get_sampling_rate()
+        time = self.get_timestamp()
+
+        # Input parameters
+        fwin = kwargs.get('fwin', [6, 12])
+
+        # Filter
+        fmax = fwin[1]
+        fmin = fwin[0]
+        _filter = [5, fmin, fmax, 'bandpass']
+        _prefilt = kwargs.get('filtset', [10, 1.5, 40, 'bandpass'])
+
+        b_lfp = butter_filter(lfp, Fs, *_filter)  # band LFP
+        lfp = butter_filter(lfp, Fs, *_prefilt)
+
+        # Measure phase
+        hilb = sg.hilbert(b_lfp)
+        phase = np.angle(hilb, deg=True)
+        phase[phase < 0] = phase[phase < 0] + 360
+
+        ephase = np.interp(event_stamps, time, phase)
+
+        return ephase
+
     def plv(self, event_stamp, **kwargs):
         """
         Calculates phase-locking value of the spike train to underlying LFP signal.
@@ -863,7 +904,6 @@ class NLfp(NBase):
             offset = np.arange(window[0], window[-1], slide)
             nwin = offset.size
 
-#            STA = np.empty([nwin, win.size])
             fSTA = np.empty([nwin, ind.size])
             STP = np.empty([nwin, ind.size])
             SFC = np.empty([nwin, ind.size])
@@ -953,7 +993,6 @@ class NLfp(NBase):
 
         graph_data = oDict()
         window = np.array(kwargs.get('window', [-0.5, 0.5]))
-#        mode = kwargs.get('mode', None)
 
         if event_stamp is None:
             spike = kwargs.get('spike', None)
@@ -1046,6 +1085,14 @@ class NLfp(NBase):
         percentile = kwargs.get("peak_percentile", 99.5)
 
         sample_rate = self.get_sampling_rate()
+        if in_range == None:
+            length = int(self.get_duration() * sample_rate)
+            if (length != self.get_total_samples()):
+                logging.warning(
+                    "Unequal calculated and recorded total lfp samples" +
+                    "Calculated {} and recorded {}".format(
+                        length, self.get_total_samples()))
+            in_range = [0, self.get_total_samples()]
         lfp_samples = self.get_samples()[
             int(sample_rate*in_range[0]):int(sample_rate*in_range[1])]
         lfp_times = self.get_timestamp()[
@@ -1070,6 +1117,113 @@ class NLfp(NBase):
         return {
             "lfp times": lfp_times, "lfp samples": filtered_lfp,
             "swr times": peaks, "lfp sample rate": sample_rate}
+
+    def bandpower(self, band, **kwargs):
+        """Compute the average power of the signal x in a specific frequency band.
+
+        Modified from excellent article at https://raphaelvallat.com/bandpower.html
+
+        Parameters
+        ----------
+        band : list
+        Lower and upper frequencies of the band of interest.
+
+        kwargs:
+            sf : float
+            Sampling frequency of the data.
+            method : string
+            Periodogram method: 'welch'
+            window_sec : float
+            Length of each window in seconds.
+            If None, window_sec = (1 / min(band)) * 2.
+            relative : boolean
+            If True, return the relative power (= divided by the total power of the signal).
+            If False (default), return the absolute power.
+
+        Returns
+        ------
+        bp : float
+        Absolute or relative band power.
+        """
+        from scipy.signal import welch
+        from scipy.integrate import simps
+        
+        band = np.asarray(band)
+        low, high = band
+        method = kwargs.get("method", "welch")
+        window_sec = kwargs.get("window_sec", 2 / (low + 0.000001))
+        relative = kwargs.get("relative", False)
+
+        sf = self.get_sampling_rate()
+        lfp_samples = self.get_samples()
+
+        # Compute the modified periodogram (Welch)
+        if method == 'welch':
+            nperseg = int(window_sec * sf)
+            freqs, psd = welch(lfp_samples, sf, nperseg=nperseg)
+
+        # The multaper method is more accurate but we will not use it
+        # Welch's method is still very good
+        # See MNE for the multitaper method
+        # from mne.time_frequency import psd_array_multitaper
+        # elif method == 'multitaper':
+        #     psd, freqs = psd_array_multitaper(lfp_samples, sf, adaptive=True,
+        #                                     normalization='full', verbose=0)
+
+        # Frequency resolution
+        freq_res = freqs[1] - freqs[0]
+
+        # Find index of band in frequency vector
+        idx_band = np.logical_and(freqs >= low, freqs <= high)
+
+        # Integral approximation of the spectrum using parabola (Simpson's rule)
+        bp = simps(psd[idx_band], dx=freq_res)
+
+        if relative:
+            bp /= simps(psd, dx=freq_res)
+        return bp
+
+    def bandpower_ratio(self, first_band, second_band, win_sec, **kwargs):
+        """
+        Calculate the ratio in power between two bandpass filtered signals.
+
+        Note that common ranges are: 
+        delta (0.5–4 Hz), theta (4–8 Hz), alpha (8–12 Hz), 
+        beta (12–30 Hz), and gamma (30–100 Hz).
+
+        Parameters
+        ----------
+        first_band - 1d array
+            lower and upper bands
+        second_band - 1d array
+            lower and upper bands
+        win_sec - float
+            length of the windows to bin lfp into in seconds. 
+            recommend 4 for eg.
+        Returns
+        -------
+        float - the ratio between the power signals.
+
+        See also
+        --------
+        nc_lfp.NLfp().bandpower()
+        """
+
+        _results = oDict()
+        name1 = kwargs.get("first_name", "Band 1")
+        name2 = kwargs.get("second_name", "Band 2")
+
+        b1 = self.bandpower(first_band, **kwargs)  
+        b2 = self.bandpower(second_band, **kwargs)
+        bp = b1 / b2
+        key1 = name1 + " Power"
+        key2 = name2 + " Power"
+        key3 = name1 + " " + name2 + " Power Ratio"
+        _results[key1] = b1
+        _results[key2] = b2
+        _results[key3] = bp
+        self.update_result(_results)
+        return bp 
 
     def save_to_hdf5(self, file_name=None, system=None):
         """
@@ -1359,9 +1513,9 @@ class NLfp(NBase):
                 wave_bytes = sample_bytes[sample_offset+ np.arange(valid_samples* bytes_per_sample)]\
                                 .reshape([valid_samples, bytes_per_sample])
                 block_wave = np.dot(wave_bytes, sample_le)
-#                for k in np.arange(valid_samples):
-#                    block_wave[k] = int.from_bytes(sample_bytes[sample_offset+ k*bytes_per_sample+ \
-#                                np.arange(bytes_per_sample)], byteorder='little', signed=False)
+                #    for k in np.arange(valid_samples):
+                #        block_wave[k] = int.from_bytes(sample_bytes[sample_offset+ k*bytes_per_sample+ \
+                #                    np.arange(bytes_per_sample)], byteorder='little', signed=False)
                 np.putmask(block_wave, block_wave > max_ADC_count, block_wave - max_byte_value)
                 block_wave = block_wave*AD_bit_uvolt
                 block_time = block_start +  np.arange(valid_samples)/ sampling_freq

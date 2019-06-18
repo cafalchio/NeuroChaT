@@ -306,7 +306,7 @@ class NDataContainer():
             # excel_info = excel_info.iloc[:, 1:] # Can be used to remove index
             count = 0
             for full_row in excel_info.itertuples():
-                split = [full_row[i:i+5]
+                split = [full_row[i:i + 5]
                          for i in range(1, len(full_row), 5)
                          if not pd.isna(full_row[i])]
                 merge = True if len(split) > 1 else False
@@ -376,6 +376,13 @@ class NDataContainer():
         directory : str
             The directory to parse through
 
+        **kwargs: keyword arguments
+            tetrode_list : list
+                list of tetrodes to consider
+            data_extension : str default .set
+            cluster_extension : str default .cut
+            pos_extension : str default .txt
+            lfp_extension : str default .eeg
         Returns
         -------
         None
@@ -407,7 +414,9 @@ class NDataContainer():
                         pos_name = fname
                         break
                 else:
-                    logging.info("No position file for {}".format(filename))
+                    logging.info(
+                        "Skipping this - no position file for {}".format(filename))
+                    continue
 
                 self.add_files(NDataContainer.EFileType.Spike, [spike_name])
                 self.add_files(NDataContainer.EFileType.Position, [pos_name])

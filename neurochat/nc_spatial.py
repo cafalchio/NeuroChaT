@@ -949,7 +949,7 @@ class NSpatial(NAbstract):
             self._set_pos_x(spatial_data[:, 1]- np.min(spatial_data[:, 1]))
             self._set_pos_y(spatial_data[:, 2]- np.min(spatial_data[:, 2]))
             self._set_direction(spatial_data[:, 3])
-#            self._set_speed(spatial_data[:, 4]) # Neuralynx data does not have any speed information
+            # Neuralynx data does not have any speed information
             self.smooth_direction()
 
     def smooth_speed(self):
@@ -1181,7 +1181,7 @@ class NSpatial(NAbstract):
         
         firing_rate[np.isnan(firing_rate)] = 0
         Li = firing_rate # Lambda
-#        L = np.sum(firing_rate*visit_time)/ visit_time.sum()
+        # L = np.sum(firing_rate*visit_time)/ visit_time.sum()
         P = visit_time/visit_time.sum()
         return np.sum(P*Li)**2/ np.sum(P*Li**2)
 
@@ -1346,8 +1346,8 @@ class NSpatial(NAbstract):
         required_neighbours = kwargs.get('minPlaceFieldNeighbours', 9)
         smooth_place = kwargs.get('smoothPlace', False)
 
-#        xedges = np.arange(0, np.ceil(np.max(self._pos_x)), pixel)
-#        yedges = np.arange(0, np.ceil(np.max(self._pos_y)), pixel)
+        # xedges = np.arange(0, np.ceil(np.max(self._pos_x)), pixel)
+        # yedges = np.arange(0, np.ceil(np.max(self._pos_y)), pixel)
 
         # Update the border to match the requested pixel size
         self.set_border(self.calc_border(**kwargs))
@@ -1390,19 +1390,53 @@ class NSpatial(NAbstract):
             pmap = fmap
         
         pmap[tmap == 0] = None
-        pfield, largest_group = NSpatial.place_field(pmap, thresh, required_neighbours)
+        pfield, largest_group = NSpatial.place_field(
+            pmap, thresh, required_neighbours)
+        if largest_group == 0:
+            if smooth_place:
+                info = "where the place field was calculated from smoothed data"
+            else:
+                info = "where the place field was calculated from raw data"
+            logging.info(
+                "Lack of high firing neighbours to identify place field " +
+                info)
         centroid = NSpatial.place_field_centroid(pfield, pmap, largest_group)
         #centroid is currently in co-ordinates, convert to pixels
         centroid = centroid * pixel + (pixel * 0.5)
         #flip x and y
         centroid = centroid[::-1]
         
+        p_shape = pfield.shape
+        maxes = [xedges.max(), yedges.max()]
+        scales = (
+             maxes[0] / p_shape[1],
+             maxes[1] / p_shape[0])
+        co_ords = np.array(np.where(pfield == largest_group))
+        boundary = [None, None]
+        for i in range(2):
+            j = (i + 1) % 2
+            boundary[i] = (
+                co_ords[j].min() * scales[i],
+                np.clip((co_ords[j].max()+1) * scales[i], 0, maxes[i]))
+        inside_x = (
+            (boundary[0][0] <= spikeLoc[0]) &
+            (spikeLoc[0] <= boundary[0][1]))
+        inside_y = (
+            (boundary[1][0] <= spikeLoc[1]) &
+            (spikeLoc[1] <= boundary[1][1]))
+        co_ords = np.nonzero(np.logical_and(inside_x, inside_y))
+
         if update:
             _results['Spatial Skaggs'] = self.skaggs_info(fmap, tmap)
             _results['Spatial Sparsity'] = self.spatial_sparsity(fmap, tmap)
             _results['Spatial Coherence'] = np.corrcoef(fmap[tmap != 0].flatten(), smoothMap[tmap != 0].flatten())[0, 1]
+            _results['Found strong place field'] = (largest_group != 0)
             _results['Place field Centroid x'] = centroid[0]
             _results['Place field Centroid y'] = centroid[1]
+            _results['Place field Boundary x'] = boundary[0]
+            _results['Place field Boundary y'] = boundary[1]
+            _results['Number of Spikes in Place Field'] = co_ords[0].size
+            _results['Percentage of Spikes in Place Field'] = co_ords[0].size*100 / ftimes.size
             self.update_result(_results)
 
         smoothMap[tmap == 0] = None
@@ -1417,6 +1451,9 @@ class NSpatial(NAbstract):
         graph_data['yedges'] = yedges
         graph_data['spikeLoc'] = spikeLoc
         graph_data['placeField'] = pfield
+        graph_data['largestPlaceGroup'] = largest_group
+        graph_data['placeBoundary'] = boundary
+        graph_data['indicesInPlaceField'] = co_ords
         graph_data['centroid'] = centroid
 
         return graph_data
@@ -2060,6 +2097,7 @@ class NSpatial(NAbstract):
         where_are_NaNs = np.isnan(pmap)
         pmap[where_are_NaNs] = 0
         pmap = pmap/pmap.max()
+        weights = pmap
         pmap = pmap > thresh
 
         # Pad the place field with a single layer of zeros to compare neighbours
@@ -2099,15 +2137,22 @@ class NSpatial(NAbstract):
         # If there are no large enough fields, label all bins as 0
         uniques, counts = np.unique(ptag[ptag > 0], return_counts=True)
         max_count, largest_group_num = 0, 0
+        reduction = 0
         for unique, count in zip(uniques, counts):
             # Don't consider groups that are small
+            unique = unique - reduction
             if count < required_neighbours:
                 ptag[ptag == unique] = 0
-            # Define the largest group to be the one with the largest area
-            # Could also be the one with largest weight
-            elif count > max_count:
-                max_count = count
-                largest_group_num = unique
+                ptag[ptag > unique] = ptag[ptag > unique] - 1
+                reduction = reduction + 1
+            # Define the largest group to be the one with largest weight
+            # Could also be the one with the largest area
+            else:
+                interest_weights = weights[ptag == unique]
+                weight = np.sum(interest_weights)
+                if weight > max_count:
+                    max_count = weight
+                    largest_group_num = unique
 
         return ptag, largest_group_num
 
@@ -2153,10 +2198,12 @@ class NSpatial(NAbstract):
         -------
         ndarray        
             Index of the events in spatial-timestamps
-        ndarray
-            x-coordinates of the event location
-        ndarray
-            y-ccordinates of the event location
+        [ Two item list containing
+            ndarray
+                x-coordinates of the event location
+            ndarray
+                y-ccordinates of the event location
+        ]
         ndarray
             direction of the animal at the time of the event            
         """
@@ -2164,8 +2211,20 @@ class NSpatial(NAbstract):
         
         time = self.get_time()
         lim = kwargs.get('range', [0, time.max()])
-        vidInd = histogram(ftimes[np.logical_and(ftimes >= lim[0], ftimes < lim[1])], time)[1]
-        retInd = vidInd[vidInd != 0]
+
+        # Sean - Why is zero idx is always thrown away?
+        keep_zero_idx = kwargs.get('keep_zero_idx', False)
+        
+        hist = histogram(
+            ftimes[np.logical_and(
+                    ftimes >= lim[0], ftimes < lim[1])], 
+            time)
+        vidInd = hist[1]
+
+        if keep_zero_idx:
+            retInd = vidInd
+        else:
+            retInd = vidInd[vidInd != 0]
         
         return retInd, [self._pos_x[retInd], self._pos_y[retInd]], self._direction[retInd]
 
