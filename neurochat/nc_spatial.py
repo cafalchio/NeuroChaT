@@ -11,6 +11,7 @@ import re
 import logging
 
 from collections import OrderedDict as oDict
+from copy import deepcopy
 
 from neurochat.nc_utils import chop_edges, corr_coeff, extrema,\
             find, find2d, find_chunk, histogram, histogram2d, \
@@ -78,6 +79,41 @@ class NSpatial(NAbstract):
         """ 
         
         return self.__type        
+
+    def subsample(self, sample_range=None):
+        """
+        Extract a time range from the positions.
+
+        NOTE for now, the duration will be longer than sample time.
+        Duration is actually from 0 to max recording length.
+        This is to easier match ndata which assumes recordings start at 0.
+        
+        Parameters
+        ----------
+        sample_range : tuple
+            the time in seconds to extract from the positions.
+        
+        Returns
+        -------
+        NSpike
+            subsampled version of initial spatial object
+        """
+        if sample_range is None:
+            return self
+        new_spatial = deepcopy(self)
+        lower, upper = sample_range
+        times = self._time
+        sample_spatial_idx = (
+            (times <= upper) & (times >= lower)).nonzero()
+        new_spatial._set_time(self._time[sample_spatial_idx])
+        new_spatial._set_pos_x(self._pos_x[sample_spatial_idx])
+        new_spatial._set_pos_y(self._pos_y[sample_spatial_idx])
+        new_spatial._set_direction(self._direction[sample_spatial_idx])
+        new_spatial._set_speed(self._speed[sample_spatial_idx])
+        new_spatial.set_ang_vel(self._ang_vel[sample_spatial_idx])
+        # NOTE can use to set proper duration
+        #new_spatial._set_duration(upper-lower)
+        return new_spatial
 
     def set_pixel_size(self, pixel_size):
         """
@@ -311,7 +347,10 @@ class NSpatial(NAbstract):
             Duration of the experiment
 
         """
+        if len(self._time) == 0:
+            return 0
         return self._time[-1]
+        
     
     def get_pixel_size(self):
         """
@@ -1123,7 +1162,13 @@ class NSpatial(NAbstract):
 
         for J in np.arange(ybin):
             for I in np.arange(xbin):
-                tmp_dist = np.min(np.abs(xx[border]- xx[J, I])+ np.abs(yy[border]- yy[J, I]))
+                dist_arr = (
+                    np.abs(xx[border] - xx[J, I]) +
+                    np.abs(yy[border] - yy[J, I]))
+                if dist_arr.size == 0:
+                    logging.error("could not calculate border")
+                    return None, None, None, None
+                tmp_dist = np.min(dist_arr)
                 if find(np.logical_and(xind == I, yind == J)).size:
                     borderDist[np.logical_and(xind == I, yind == J)] = tmp_dist
                 distMat[J, I] = tmp_dist
@@ -1345,12 +1390,24 @@ class NSpatial(NAbstract):
         thresh = kwargs.get('fieldThresh', 0.2)
         required_neighbours = kwargs.get('minPlaceFieldNeighbours', 9)
         smooth_place = kwargs.get('smoothPlace', False)
+        separate_border_data = kwargs.get(
+            "separateBorderData", False)
 
         # xedges = np.arange(0, np.ceil(np.max(self._pos_x)), pixel)
         # yedges = np.arange(0, np.ceil(np.max(self._pos_y)), pixel)
 
         # Update the border to match the requested pixel size
-        self.set_border(self.calc_border(**kwargs))
+        if separate_border_data:
+            self.set_border(
+                separate_border_data.calc_border(**kwargs))
+            times = self._time
+            lower, upper = (times.min(), times.max())
+            new_times = separate_border_data._time
+            sample_spatial_idx = (
+                (new_times <= upper) & (new_times >= lower)).nonzero()
+            self._border_dist = self._border_dist[sample_spatial_idx]
+        else:  
+            self.set_border(self.calc_border(**kwargs))
 
         xedges = self._xbound
         yedges = self._ybound

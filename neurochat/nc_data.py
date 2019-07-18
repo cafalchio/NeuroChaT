@@ -53,6 +53,34 @@ class NData():
 
         self.__type = 'data'
 
+    # TODO decide (or give param) to keep times or start at 0
+    def subsample(self, sample_range):
+        """
+        Split up a data object in the collection into parts.
+
+        Parameters
+        ----------
+        sample_range: tuple
+            times in seconds to extract
+
+        Returns
+        -------
+        NData
+            subsampled version of initial ndata object
+        """
+        ndata = NData()
+        if self.lfp.get_duration() != 0:
+            ndata.lfp = self.lfp.subsample(
+                sample_range)
+        if self.spike.get_duration() != 0:
+            ndata.spike = self.spike.subsample(
+                sample_range)
+        if self.spatial.get_duration() != 0:
+            ndata.spatial = self.spatial.subsample(
+                sample_range)
+
+        return ndata
+
     def get_type(self):
         """
         Returns the type of object. For NData, this is always `data` type
