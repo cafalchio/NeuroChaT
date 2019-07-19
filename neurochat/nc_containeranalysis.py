@@ -476,7 +476,7 @@ def place_cell_summary(collection, dpi=150):
     headdata = []
     thetadata = []
     isidata = []
-    skaggsdata = []
+    
     for i, data in enumerate(collection):
         try:
             data_idx, unit_idx = collection._index_to_data_pos(i)
@@ -486,8 +486,7 @@ def place_cell_summary(collection, dpi=150):
             headdata.append(data.hd_rate())
             thetadata.append(data.theta_index(bins=2, bound=[-350, 350]))
             isidata.append(data.isi(bins=int(350 / 2), bound=[0, 350]))
-            #skaggsdata.append(data.loc_shuffle())
-            
+                        
             # Save the accumulated information
             if unit_idx == len(collection.get_units(data_idx)) - 1:
                 fig = print_place_cells(
@@ -515,7 +514,7 @@ def place_cell_summary(collection, dpi=150):
                 headdata = []
                 thetadata = []
                 isidata = []
-                #skaggsdata = []
+            
         except Exception as e:
             log_exception(
                 e, "Occured during place cell summary on data" + 
