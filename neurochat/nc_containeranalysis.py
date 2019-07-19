@@ -3,7 +3,7 @@ This module contains analysis functions for NDataContainer objects.
 
 @author: Sean Martin; martins7 at tcd dot ie
 """
-
+import gc
 import logging
 from itertools import compress
 from math import floor, ceil
@@ -469,13 +469,14 @@ def replay(collection, run_idx, sleep_idx, **kwargs):
 # from multiprocessing import Process, Queue
 # TODO could also return a set of results to add to
 # NC control
-def place_cell_summary(collection, dpi=400):
+def place_cell_summary(collection, dpi=150):
     placedata = []
     graphdata = []
     wavedata = []
     headdata = []
     thetadata = []
     isidata = []
+    skaggsdata = []
     for i, data in enumerate(collection):
         try:
             data_idx, unit_idx = collection._index_to_data_pos(i)
@@ -485,7 +486,8 @@ def place_cell_summary(collection, dpi=400):
             headdata.append(data.hd_rate())
             thetadata.append(data.theta_index(bins=2, bound=[-350, 350]))
             isidata.append(data.isi(bins=int(350 / 2), bound=[0, 350]))
-
+            #skaggsdata.append(data.loc_shuffle())
+            
             # Save the accumulated information
             if unit_idx == len(collection.get_units(data_idx)) - 1:
                 fig = print_place_cells(
@@ -506,13 +508,17 @@ def place_cell_summary(collection, dpi=400):
                 make_dir_if_not_exists(out_name)
                 fig.savefig(out_name, dpi=dpi)
                 close("all")
+                gc.collect()
                 placedata = []
                 graphdata = []
                 wavedata = []
                 headdata = []
                 thetadata = []
                 isidata = []
+                #skaggsdata = []
         except Exception as e:
             log_exception(
-                e, "Occured during place cell summary on {}".format(i))
+                e, "Occured during place cell summary on data" + 
+                   " {} unit {} name {}".format(
+                    data_idx, unit_idx, spike_name))
     return
