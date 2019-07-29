@@ -479,7 +479,10 @@ def place_cell_summary(collection, dpi=150):
     
     for i, data in enumerate(collection):
         try:
+            
             data_idx, unit_idx = collection._index_to_data_pos(i)
+            print("Working on:", os.path.basename(
+                collection.get_file_dict()["Spike"][data_idx][0]))
             placedata.append(data.place())
             graphdata.append(data.isi_corr(bins=1, bound=[-10, 10]))
             wavedata.append(data.wave_property())
