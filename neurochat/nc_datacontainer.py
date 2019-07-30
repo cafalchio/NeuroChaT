@@ -12,6 +12,7 @@ import os
 
 import pandas as pd
 import numpy as np
+import pprint
 
 from neurochat.nc_data import NData
 from neurochat.nc_utils import get_all_files_in_dir
@@ -72,8 +73,10 @@ class NDataContainer():
                 return len(vals)
         return len(self._container)
 
-    def get_file_dict(self):
+    def get_file_dict(self, key=None):
         """Return the key value filename dictionary for this collection."""
+        if key:
+            return self._file_names_dict.get(key, None)
         return self._file_names_dict
 
     def get_units(self, index=None):
@@ -367,7 +370,8 @@ class NDataContainer():
             return None
 
     # Created by Sean Martin with help from Matheus Cafalchio
-    def add_axona_files_from_dir(self, directory, **kwargs):
+    def add_axona_files_from_dir(
+            self, directory, recursive=False, verbose=False, **kwargs):
         """
         Go through a directory, extracting files from it
 
@@ -375,6 +379,10 @@ class NDataContainer():
         ----------
         directory : str
             The directory to parse through
+        recursive : bool, optional. Defaults to False.
+            Whether to recurse through dirs
+        verbose: bool, optional. Defaults to False.
+            Whether to print the files being added.
 
         **kwargs: keyword arguments
             tetrode_list : list
@@ -395,8 +403,10 @@ class NDataContainer():
         pos_extension = kwargs.get("pos_extension", ".txt")
         lfp_extension = kwargs.get("lfp_extension", ".eeg")
 
-        files = get_all_files_in_dir(directory, data_extension)
-        txt_files = get_all_files_in_dir(directory, pos_extension)
+        files = get_all_files_in_dir(
+            directory, data_extension, recursive=recursive, verbose=verbose)
+        txt_files = get_all_files_in_dir(
+            directory, pos_extension, recursive=recursive, verbose=verbose)
         for filename in files:
             filename = filename[:-len(data_extension)]
             for tetrode in tetrode_list:
@@ -589,7 +599,56 @@ class NDataContainer():
                     zip(centroids, self.get_units()[idx]),
                     key=lambda pair: pair[0][h])]
 
+    def get_index_info(self, idx):
+        """Return the Spike, LFP, Position and Unit info at idx."""
+        str_info = {}
+        for key in ["Spike", "LFP", "Position"]:
+            str_info[key] = (
+                os.path.basename(self.get_file_dict(key)[idx][0]))
+        str_info["Units"] = (self.get_units(idx))
+        str_info["Root"] = os.path.dirname(self.get_file_dict("Spike")[idx][0])
+        return str_info
+
+    def string_repr(self, pretty=True):
+        """
+        Return a string representation of this class.
+
+        Parameters
+        ----------
+        pretty : str, Default True
+            Should return a pretty version or all the info.
+
+        """
+        if pretty:
+            return self._pretty_string()
+        else:
+            return self._full_string()
+
     # Methods from here on should be for private class use
+    def _pretty_string(self):
+        """Alternative printing should be prettier."""
+        all_str_info = []
+        for i in range(self.get_num_data()):
+            str_info = self.get_index_info(i)
+            b_str = "{}: Spike {}, Units {}, LFP {}, Pos {}, Dir {}".format(
+                i, str_info["Spike"], str_info["Units"], str_info["LFP"],
+                str_info["Position"], str_info["Root"]
+            )
+            all_str_info.append(b_str)
+        return "\n".join(all_str_info)
+
+    def _full_string(self):
+        string = (
+            "NData Container Object with {} objects:\n" +
+            "Set to Load on Fly? {}\n" +
+            "Files are:\n{}\n" +
+            "Units are:\n{}").format(
+                self.get_num_data(),
+                self._load_on_fly,
+                pprint.pformat(self.get_file_dict()),
+                pprint.pformat(self.get_units()))
+        return string
+
     def _load_all_data(self):
         """Intended private function which loads all the data."""
         if self._load_on_fly:
@@ -663,9 +722,7 @@ class NDataContainer():
 
     def __repr__(self):
         """Return a string representation of the collection."""
-        string = "NData Container Object with {} objects:\nFiles are {}\nUnits are {}\nSet to Load on Fly? {}".format(
-            self.get_num_data(), self.get_file_dict(), self.get_units(), self._load_on_fly)
-        return string
+        return self.string_repr(pretty=False)
 
     def __getitem__(self, index):
         """Return the data object with corresponding unit at index."""
