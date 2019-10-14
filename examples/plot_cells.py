@@ -14,7 +14,7 @@ container = NDataContainer(load_on_fly=True)
 #     recursive=True,
 #     verbose=False)
 container.add_axona_files_from_dir(
-    r"E:\\Chapter6\\6s_data_and_results\\Data",
+    r"Z:\media\cafalchio\home\Cafalchio\data\LCA1\smaller",
     recursive=True)
 
 container.setup()
