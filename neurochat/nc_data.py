@@ -53,7 +53,6 @@ class NData():
 
         self.__type = 'data'
 
-    # TODO decide (or give param) to keep times or start at 0
     def subsample(self, sample_range):
         """
         Split up a data object in the collection into parts.
@@ -96,7 +95,7 @@ class NData():
         """
         return self.__type
 
-    def get_results(self):
+    def get_results(self, spaces_to_underscores=False):
         """
         Returns the parametric results of the analyses
 
@@ -109,6 +108,10 @@ class NData():
         OrderedDict
 
         """
+        if spaces_to_underscores:
+            results = {x.replace(' ', '_'): v
+                       for x, v in self._results.items()}
+            return results
         return self._results
 
     def update_results(self, results):
