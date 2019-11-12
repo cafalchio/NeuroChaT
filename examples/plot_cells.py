@@ -13,5 +13,5 @@ def main(dir):
 
 
 if __name__ == "__main__":
-    dir = r'C:\Users\smartin5\recording_example'
+    dir = r'/home/cafalchio/Desktop/potdoc1/LCA11/25_10'
     main(dir)

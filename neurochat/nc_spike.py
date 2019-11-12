@@ -18,7 +18,7 @@ import numpy as np
 
 #import nc_utils
 #reload(nc_utils)
-from neurochat.nc_utils import extrema, find, residual_stat
+from neurochat.nc_utils import extrema, find, residual_stat, find_peaks, smooth_1d
 
 #from nc_lfp import NLfp
 from neurochat.nc_hdf import Nhdf
@@ -864,8 +864,23 @@ class NSpike(NBase):
         corrCount = graph_data['isiCorr']
         m = corrCount.max()
         center = find(corrBins == 0, 1, 'first')[0]
-        x = corrBins[center:]/1000
-        y = corrCount[center:]
+        # increase = int(60 / kwargs.get("bins"))
+
+        x_full = corrBins[center:]/1000
+        y_full = corrCount[center:]
+        print(y_full)
+        y_peak_data = smooth_1d(y_full, 'g', 5)
+        print(y_peak_data)
+        result_peaks = find_peaks(
+            -y_peak_data, thresh=-100000)
+        if result_peaks == []:
+            increase = 0
+        else:
+            peak_vals, peak_locs = result_peaks
+            print(-peak_vals, peak_locs)
+            increase = peak_locs[0]
+        x = x_full[increase:]
+        y = y_full[increase:]
         y_fit = np.empty([corrBins.size,])
 
         ## This is for the double-exponent dip model
@@ -906,10 +921,10 @@ class NSpike(NBase):
 
         a, f, tau1, b, c, tau2 = popt
 
-        y_fit[center:] = fit_func(x, *popt)
+        y_fit[center:] = fit_func(x_full, *popt)
         y_fit[:center] = np.flipud(y_fit[center:])
 
-        gof = residual_stat(y, y_fit[center:], 6)
+        gof = residual_stat(y_full, y_fit[center:], 6)
 
         graph_data['corrFit'] = y_fit
         _results['Theta Index'] = a/b

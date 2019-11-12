@@ -921,6 +921,7 @@ def find_peaks(data, **kwargs):
     valid_loc = [
         i for i in range(0, len(peak_loc)) if peak_val[i] >= thresh]
     if len(valid_loc) == 0:
+        logging.info("Found no peaks in find_peaks")
         return []
     peak_val, peak_loc= zip(*((peak_val[i], peak_loc[i]) for i in valid_loc))
     return np.array(peak_val), np.array(peak_loc)
