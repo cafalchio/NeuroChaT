@@ -2131,11 +2131,14 @@ def print_place_cells(
                 if idx is not None:
                     hd_data = headdata[i]
                     ax = fig.add_subplot(gs[j, idx], projection='polar')
-                    hd_rate(headdata[i], ax=ax, title=None)
+                    hd_rate(hd_data, ax=ax, title=None)
                     bins = np.append(hd_data['bins'], hd_data['bins'][0])
-                    predRate = np.append(hd_data['hdPred'], hd_data['hdPred'][0])
+                    predRate = np.append(
+                        hd_data['hdPred'], hd_data['hdPred'][0])
                     ax.plot(np.radians(bins), predRate, color='green')
-                    ax.set_rticks([hd_data['hdRate'].max(), hd_data['hdPred'].max()])
+                    ax.set_rticks(
+                        [hd_data['hdRate'].max(), hd_data['hdPred'].max()])
+
         
         if wavedata is not None:
             if wavedata[i] is not None:
