@@ -9,9 +9,19 @@ def main(dir):
     container.setup()
     print(container.string_repr(True))
     nca.place_cell_summary(
-        container, dpi=200, out_dirname="nc_spat_plots")
+        container, dpi=200, out_dirname="nc_spat_plots", 
+        filter_place_cells=True, filter_low_freq=True,
+        num_shuffles=300)
 
 
 if __name__ == "__main__":
-    dir = r'C:\Users\smartin5\recording_example'
+    dir = r'/media/cafalchio/ATN_CA1_backup/ATNx_CA1_1'
+    main(dir)
+
+if __name__ == "__main__":
+    dir = r'/media/cafalchio/ATN_CA1_backup/ATNx_CA1_2'
+    main(dir)
+
+if __name__ == "__main__":
+    dir = r'/media/cafalchio/ATN_CA1_backup/ATNx_CA1_3'
     main(dir)

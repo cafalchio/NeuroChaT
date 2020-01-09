@@ -1275,7 +1275,14 @@ class NSpatial(NAbstract):
         rate = rate[visit_time > 1]
         bins = bins[visit_time > 1]
 
+
+    
+        bins = bins[rate>0] # try to remove zeros
+        rate = rate[rate>0]
+
         fit_result = linfit(bins, rate)
+        
+
 
         _results['Speed Pears R'] = fit_result['Pearson R']
         _results['Speed Pears P'] = fit_result['Pearson P']

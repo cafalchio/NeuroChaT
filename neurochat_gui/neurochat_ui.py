@@ -10,6 +10,8 @@ of the NeuroChaT software.
 """
 
 import sys
+sys.path.insert(1, r'/home/cafalchio/Documents/neurosean/NeuroChaT')
+sys.path.insert(1, r'/home/cafalchio/Documents/neurosean/NeuroChaT')
 import logging
 from PyQt5 import QtWidgets
 from neurochat.nc_ui import NeuroChaT_Ui
